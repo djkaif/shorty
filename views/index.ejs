@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shorty | Free Custom URL Shortener & QR Code Generator</title>
+    <meta name="description" content="Shorty is a free tool to shorten URLs and generate QR codes. Create custom links, track clicks, and boost your brand completely free.">
+    <meta name="keywords" content="url shortener, link shortener, free url shortener, custom link, qr code generator">
+    <meta property="og:title" content="Shorty - The Best Free URL Shortener">
+    <meta property="og:description" content="Shorten links and generate QR codes instantly. No signup required.">
+    <link rel="stylesheet" href="/css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <nav>
+            <div class="logo">Shorty<span>.</span></div>
+            <div class="nav-links">
+                <a href="#">Features</a>
+                <a href="https://github.com" target="_blank">GitHub</a>
+            </div>
+        </nav>
+
+        <main>
+            <div class="hero">
+                <h1>Make every connection count</h1>
+                <p>Create short, powerful links and QR codes for your business or personal use. Totally free, forever.</p>
+            </div>
+
+            <div class="shortener-box">
+                <form id="shortenForm">
+                    <input type="url" id="longUrl" placeholder="Paste your long link here..." required>
+                    <div class="options">
+                        <input type="text" id="customAlias" placeholder="Custom alias (optional, e.g. my-promo)">
+                    </div>
+                    <button type="submit">Shorten URL</button>
+                </form>
+                <div id="error-msg" class="error"></div>
+            </div>
+
+            <div id="result-area" class="hidden">
+                <div class="result-card">
+                    <div class="link-info">
+                        <span class="label">Short Link:</span>
+                        <a href="#" id="shortLink" target="_blank" class="short-url">...</a>
+                        <button id="copyBtn">Copy</button>
+                    </div>
+                    <div class="qr-code">
+                        <img id="qrImage" src="" alt="QR Code">
+                        <a id="downloadQr" href="#" download="qrcode.png">Download QR</a>
+                    </div>
+                    <div class="stats-badge">
+                        <span>Clicks tracked: <strong id="clickCount">0</strong></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="recent-links">
+                <h3>Your Recent Links</h3>
+                <div id="recentList"></div>
+            </div>
+        </main>
+
+        <footer>
+            <p>&copy; 2025 Shorty. Open Source Project.</p>
+        </footer>
+    </div>
+    <script src="/js/script.js"></script>
+</body>
+</html>
