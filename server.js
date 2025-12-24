@@ -1,33 +1,35 @@
 require('dotenv').config();
 const express = require('express');
+const { GoogleSpreadsheet } = require('google-spreadsheet');
+const { JWT } = require('google-auth-library');
 const shortid = require('shortid');
 const validUrl = require('valid-url');
 const QRCode = require('qrcode');
 const path = require('path');
-const fs = require('fs');
 
 const app = express();
-const DATA_FILE = path.join(__dirname, 'links.json');
 
-// --- DATABASE HELPER FUNCTIONS ---
+// --- GOOGLE SHEETS CONNECTION SETUP ---
+const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
+// Parse the full JSON string from your environment variable
+const creds = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
 
-// Ensure links.json exists so the app doesn't crash
-if (!fs.existsSync(DATA_FILE)) {
-    fs.writeFileSync(DATA_FILE, JSON.stringify([], null, 2));
+const auth = new JWT({
+    email: creds.client_email,
+    key: creds.private_key,
+    scopes: SCOPES,
+});
+
+const doc = new GoogleSpreadsheet(process.env.GOOGLE_SHEET_ID, auth);
+
+// Helper to initialize and get the first sheet
+async function getSheet() {
+    await doc.loadInfo();
+    const sheet = doc.sheetsByIndex[0];
+    // Ensure headers exist if sheet is new
+    await sheet.setHeaderRow(['urlCode', 'longUrl', 'shortUrl', 'qrCode', 'clicks', 'date']);
+    return sheet;
 }
-
-const getLinks = () => {
-    try {
-        const data = fs.readFileSync(DATA_FILE, 'utf8');
-        return JSON.parse(data);
-    } catch (err) {
-        return [];
-    }
-};
-
-const saveLinks = (links) => {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(links, null, 2));
-};
 
 // --- MIDDLEWARE ---
 app.set('view engine', 'ejs');
@@ -45,7 +47,7 @@ app.get('/', async (req, res) => {
     });
 });
 
-// 2. Create Short URL API (Keeping all your logic)
+// 2. Create Short URL API
 app.post('/api/shorten', async (req, res) => {
     const { longUrl, customAlias } = req.body;
     const baseUrl = process.env.BASE_URL || `https://${req.get('host')}`;
@@ -55,13 +57,14 @@ app.post('/api/shorten', async (req, res) => {
     }
 
     try {
-        let links = getLinks();
+        const sheet = await getSheet();
+        const rows = await sheet.getRows();
         let urlCode;
 
-        // Custom alias logic (Identical to your original code)
+        // Custom alias logic (Preserved from your JSON code)
         if (customAlias && customAlias.trim() !== "") {
             urlCode = customAlias.trim().replace(/\s+/g, '-');
-            const existing = links.find(l => l.urlCode === urlCode);
+            const existing = rows.find(row => row.get('urlCode') === urlCode);
             if (existing) {
                 return res.status(400).json({ error: 'Alias already in use' });
             }
@@ -72,47 +75,49 @@ app.post('/api/shorten', async (req, res) => {
         const shortUrl = `${baseUrl}/${urlCode}`;
         const qrCodeImage = await QRCode.toDataURL(shortUrl);
 
-        // Create the new link object
-        const newUrl = {
-            urlCode,
-            longUrl,
-            shortUrl,
+        // Add to Google Sheets
+        const newRow = {
+            urlCode: urlCode,
+            longUrl: longUrl,
+            shortUrl: shortUrl,
             qrCode: qrCodeImage,
             clicks: 0,
-            date: new Date()
+            date: new Date().toLocaleString()
         };
 
-        links.push(newUrl);
-        saveLinks(links);
-        
-        res.json(newUrl);
+        await sheet.addRow(newRow);
+
+        // Return the same format as before for your frontend
+        res.json(newRow);
 
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Server error' });
+        console.error('Shorten Error:', err);
+        res.status(500).json({ error: 'Server error accessing database' });
     }
 });
 
 // 3. Redirect Endpoint (With Click Analytics)
 app.get('/:code', async (req, res) => {
     try {
-        let links = getLinks();
-        const linkIndex = links.findIndex(l => l.urlCode === req.params.code);
+        const sheet = await getSheet();
+        const rows = await sheet.getRows();
+        const row = rows.find(r => r.get('urlCode') === req.params.code);
 
-        if (linkIndex !== -1) {
-            // Analytics: Increment click count
-            links[linkIndex].clicks++;
-            saveLinks(links);
-            
-            return res.redirect(links[linkIndex].longUrl);
+        if (row) {
+            // Analytics: Increment click count in the sheet
+            let currentClicks = parseInt(row.get('clicks')) || 0;
+            row.set('clicks', currentClicks + 1);
+            await row.save();
+
+            return res.redirect(row.get('longUrl'));
         } else {
             return res.status(404).render('index', { title: '404 - Link Not Found' });
         }
     } catch (err) {
-        console.error(err);
+        console.error('Redirect Error:', err);
         res.status(500).send('Server error');
     }
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`Server running on port ${PORT} with Google Sheets`));
