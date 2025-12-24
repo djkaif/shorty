@@ -1,3 +1,4 @@
+cat <<EOF > views/index.ejs
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -45,12 +46,13 @@
             if (data.error) {
                 alert(data.error);
             } else {
-                document.getElementById('result').innerHTML = `
-                    <p>Short URL: <a href="${data.shortUrl}" target="_blank">${data.shortUrl}</a></p>
-                    <img src="${data.qrCode}" alt="QR Code">
-                `;
+                document.getElementById('result').innerHTML = \`
+                    <p>Short URL: <a href="\${data.shortUrl}" target="_blank">\${data.shortUrl}</a></p>
+                    <img src="\${data.qrCode}" alt="QR Code">
+                \`;
             }
         });
     </script>
 </body>
 </html>
+EOF
