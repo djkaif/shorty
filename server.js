@@ -87,6 +87,21 @@ app.post('/api/shorten', async (req, res) => {
     } catch (e) { res.status(500).json({ error: 'Database error' }); }
 });
 
+app.get('/signup', (req, res) => {
+    res.render('signup');
+});
+
+app.get('/login', (req, res) => {
+    res.render('login');
+});
+
+app.get('/logout', (req, res) => {
+    res.clearCookie('token');
+    res.redirect('/');
+});
+
+
+
 // 4. REDIRECT (MUST BE LAST)
 app.get('/:code', async (req, res) => {
     try {
