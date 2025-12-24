@@ -1,53 +1,67 @@
 require('dotenv').config();
 const express = require('express');
-const mongoose = require('mongoose');
 const shortid = require('shortid');
 const validUrl = require('valid-url');
 const QRCode = require('qrcode');
 const path = require('path');
-const Url = require('./models/Url');
+const fs = require('fs');
 
 const app = express();
+const DATA_FILE = path.join(__dirname, 'links.json');
 
-// Connect to Database
-mongoose.connect(process.env.MONGO_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true
-}).then(() => console.log('MongoDB Connected'))
-  .catch(err => console.log(err));
+// --- DATABASE HELPER FUNCTIONS ---
 
-// Middleware
+// Ensure links.json exists so the app doesn't crash
+if (!fs.existsSync(DATA_FILE)) {
+    fs.writeFileSync(DATA_FILE, JSON.stringify([], null, 2));
+}
+
+const getLinks = () => {
+    try {
+        const data = fs.readFileSync(DATA_FILE, 'utf8');
+        return JSON.parse(data);
+    } catch (err) {
+        return [];
+    }
+};
+
+const saveLinks = (links) => {
+    fs.writeFileSync(DATA_FILE, JSON.stringify(links, null, 2));
+};
+
+// --- MIDDLEWARE ---
 app.set('view engine', 'ejs');
 app.use(express.static('public'));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-// Routes
+// --- ROUTES ---
 
-// 1. Home Page (Render the UI)
+// 1. Home Page
 app.get('/', async (req, res) => {
-    res.render('index', { 
+    res.render('index', {
         title: 'Shorty - Free Custom URL Shortener',
-        baseUrl: process.env.BASE_URL || req.get('host') 
+        baseUrl: process.env.BASE_URL || `https://${req.get('host')}`
     });
 });
 
-// 2. Create Short URL API
+// 2. Create Short URL API (Keeping all your logic)
 app.post('/api/shorten', async (req, res) => {
     const { longUrl, customAlias } = req.body;
-    const baseUrl = process.env.BASE_URL || `http://${req.get('host')}`;
+    const baseUrl = process.env.BASE_URL || `https://${req.get('host')}`;
 
     if (!validUrl.isUri(longUrl)) {
         return res.status(401).json({ error: 'Invalid URL supplied' });
     }
 
     try {
+        let links = getLinks();
         let urlCode;
-        
-        // Use custom alias if provided, otherwise generate random
+
+        // Custom alias logic (Identical to your original code)
         if (customAlias && customAlias.trim() !== "") {
             urlCode = customAlias.trim().replace(/\s+/g, '-');
-            const existing = await Url.findOne({ urlCode });
+            const existing = links.find(l => l.urlCode === urlCode);
             if (existing) {
                 return res.status(400).json({ error: 'Alias already in use' });
             }
@@ -55,20 +69,22 @@ app.post('/api/shorten', async (req, res) => {
             urlCode = shortid.generate();
         }
 
-        // Check if long URL already exists (optional, keeping it fresh for this build)
-        // Create QR Code
         const shortUrl = `${baseUrl}/${urlCode}`;
         const qrCodeImage = await QRCode.toDataURL(shortUrl);
 
-        const newUrl = new Url({
+        // Create the new link object
+        const newUrl = {
             urlCode,
             longUrl,
             shortUrl,
             qrCode: qrCodeImage,
+            clicks: 0,
             date: new Date()
-        });
+        };
 
-        await newUrl.save();
+        links.push(newUrl);
+        saveLinks(links);
+        
         res.json(newUrl);
 
     } catch (err) {
@@ -77,22 +93,24 @@ app.post('/api/shorten', async (req, res) => {
     }
 });
 
-// 3. Redirect Endpoint
+// 3. Redirect Endpoint (With Click Analytics)
 app.get('/:code', async (req, res) => {
     try {
-        const url = await Url.findOne({ urlCode: req.params.code });
+        let links = getLinks();
+        const linkIndex = links.findIndex(l => l.urlCode === req.params.code);
 
-        if (url) {
+        if (linkIndex !== -1) {
             // Analytics: Increment click count
-            url.clicks++;
-            url.save();
-            return res.redirect(url.longUrl);
+            links[linkIndex].clicks++;
+            saveLinks(links);
+            
+            return res.redirect(links[linkIndex].longUrl);
         } else {
             return res.status(404).render('index', { title: '404 - Link Not Found' });
         }
     } catch (err) {
         console.error(err);
-        res.status(500).json('Server error');
+        res.status(500).send('Server error');
     }
 });
 
